@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+frontend/node_modules/
+frontend/dist/
+data_cache/overpass/
+data_cache/rasters/*.tif
+data_cache/rasters/*.part
+.DS_Store

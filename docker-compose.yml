@@ -1,0 +1,31 @@
+# PharmaSpot Morocco — run API + static UI in containers.
+# Usage: docker compose up --build
+# App: http://localhost:8080  (frontend proxies /api → backend)
+#
+# Optional: cap CPU/RAM so the stack does not dominate your machine (tune values).
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: pharmaspot-backend
+    volumes:
+      - ./data_cache:/app/data_cache
+    expose:
+      - "8000"
+    restart: unless-stopped
+    cpus: "2.0"
+    mem_limit: 2g
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: pharmaspot-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    cpus: "0.5"
+    mem_limit: 128m
