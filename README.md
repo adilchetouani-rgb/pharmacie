@@ -118,6 +118,10 @@ Then open **http://localhost:8080** (nginx serves the built UI and proxies `/api
 
 **Honest note:** Docker does not make the **same** analysis use less CPU or RAM than running natively — it mainly helps you **turn the stack off** easily and **bound** peak usage. Heavy grid + Overpass work is still heavy inside the container.
 
+## Deploy backend on Oracle Cloud (Always Free ARM)
+
+Step-by-step: [docs/DEPLOY_ORACLE.md](docs/DEPLOY_ORACLE.md). Use an **Ampere A1** VM with enough RAM; bootstrap script: `scripts/oracle-vm-bootstrap.sh`.
+
 ## Public deployment (shareable link)
 
 This app is best deployed as:
