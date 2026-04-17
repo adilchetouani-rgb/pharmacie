@@ -126,6 +126,10 @@ Step-by-step: [docs/DEPLOY_ORACLE.md](docs/DEPLOY_ORACLE.md). Use an **Ampere A1
 
 HTTPS URL, pairs well with Vercel: [docs/DEPLOY_GCP.md](docs/DEPLOY_GCP.md). Build uses `cloudbuild.yaml` at repo root; the API listens on **`PORT`** (Cloud Run) or **8000** (local Docker).
 
+## Run the API in Google Colab (demo / no GCP project)
+
+For a quick public HTTPS URL without managing Cloud Run, open **[notebooks/PharmaSpot_Colab.ipynb](notebooks/PharmaSpot_Colab.ipynb)** in Colab (File → Upload notebook, or open from GitHub). It installs the backend, starts FastAPI, and uses **ngrok** so you can set `VITE_API_BASE_URL` on Vercel. Colab sessions disconnect when idle; not a replacement for a real server.
+
 ## Public deployment (shareable link)
 
 This app is best deployed as:
