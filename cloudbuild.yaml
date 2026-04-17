@@ -1,0 +1,13 @@
+# Build and push image to Google Container Registry (gcr.io).
+# Run from repo root: gcloud builds submit --config cloudbuild.yaml .
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-f"
+      - "backend/Dockerfile"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/pharmaspot-backend:latest"
+      - "."
+images:
+  - "gcr.io/$PROJECT_ID/pharmaspot-backend:latest"

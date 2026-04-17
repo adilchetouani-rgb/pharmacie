@@ -122,6 +122,10 @@ Then open **http://localhost:8080** (nginx serves the built UI and proxies `/api
 
 Step-by-step: [docs/DEPLOY_ORACLE.md](docs/DEPLOY_ORACLE.md). Use an **Ampere A1** VM with enough RAM; bootstrap script: `scripts/oracle-vm-bootstrap.sh`.
 
+## Deploy backend on Google Cloud Run
+
+HTTPS URL, pairs well with Vercel: [docs/DEPLOY_GCP.md](docs/DEPLOY_GCP.md). Build uses `cloudbuild.yaml` at repo root; the API listens on **`PORT`** (Cloud Run) or **8000** (local Docker).
+
 ## Public deployment (shareable link)
 
 This app is best deployed as:

@@ -26,5 +26,6 @@ ENV OMP_NUM_THREADS=1
 ENV NUMEXPR_MAX_THREADS=1
 ENV PYTHONHASHSEED=random
 
-EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+# Local / docker-compose: default 8000. Google Cloud Run sets PORT (usually 8080).
+EXPOSE 8000 8080
+CMD ["sh", "-c", "exec python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --no-access-log"]
