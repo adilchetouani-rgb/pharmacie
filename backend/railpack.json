@@ -1,0 +1,11 @@
+{
+  "packages": [
+    "libexpat1",
+    "libexpat1-dev",
+    "libgdal-dev",
+    "gdal-bin",
+    "libspatialindex-dev",
+    "libgeos-dev",
+    "libproj-dev"
+  ]
+}
