@@ -25,6 +25,17 @@ import "leaflet/dist/leaflet.css";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 const apiUrl = (path) => `${API_BASE_URL}${path}`;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchWithOneRetry(url, options = {}, retryDelayMs = 2500) {
+  try {
+    return await fetch(url, options);
+  } catch (e) {
+    // Railway can briefly restart/cold-start during heavy analysis.
+    await sleep(retryDelayMs);
+    return fetch(url, options);
+  }
+}
 
 
 
@@ -231,7 +242,7 @@ export default function App() {
         Refresh only on analyze; recommendations omits refresh so it reuses that result.
       */
       const aQ = refresh ? "?refresh=1" : "";
-      const r1 = await fetch(apiUrl(`/api/analyze/${slug}${aQ}`));
+      const r1 = await fetchWithOneRetry(apiUrl(`/api/analyze/${slug}${aQ}`));
       const t1 = await r1.text();
       if (!r1.ok) throw new Error(await parseError(r1, t1));
 
@@ -243,7 +254,7 @@ export default function App() {
         heatmap: aj.heatmap,
       });
 
-      const r2 = await fetch(apiUrl(`/api/recommendations/${slug}?top_n=200`));
+      const r2 = await fetchWithOneRetry(apiUrl(`/api/recommendations/${slug}?top_n=200`));
       const t2 = await r2.text();
       if (!r2.ok) {
         setRecs([]);
@@ -253,7 +264,14 @@ export default function App() {
         setRecs(bj.recommendations || []);
       }
     } catch (e) {
-      setErr(String(e.message || e));
+      const msg = String(e?.message || e || "");
+      if (msg.toLowerCase().includes("failed to fetch")) {
+        setErr(
+          "Connection to backend was interrupted (Railway restart/timeout). Please click Analyze again in 10-20 seconds."
+        );
+      } else {
+        setErr(msg);
+      }
     } finally {
       setLoading(false);
     }
