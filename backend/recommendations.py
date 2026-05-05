@@ -69,6 +69,69 @@ def diversify_bucket(recs: list[dict], top_n: int) -> list[dict]:
     return uniq
 
 
+def _aggregate_by_neighborhood(recs: list[dict], top_n: int) -> list[dict]:
+    """
+    Return one representative row per neighborhood with count of opportunities.
+    Representative is the highest-score cell in that neighborhood.
+    """
+    groups: dict[str, list[dict]] = {}
+    for r in recs:
+        nb = str(r.get("neighborhood") or "").strip()
+        if not nb:
+            continue
+        groups.setdefault(nb, []).append(r)
+
+    out: list[dict] = []
+    for nb, items in groups.items():
+        # Populated/legal opportunities are already pre-filtered upstream, but keep a guard.
+        eligible = [
+            x
+            for x in items
+            if float(x.get("estimated_pop_density_per_km2", 0)) > 0
+            and int(x.get("buildings_in_cell", 0)) > 0
+        ]
+        if not eligible:
+            continue
+        best = max(eligible, key=lambda x: float(x.get("score", 0)))
+        avg_score = sum(float(x.get("score", 0)) for x in eligible) / len(eligible)
+        avg_pop = (
+            sum(float(x.get("estimated_pop_density_per_km2", 0)) for x in eligible) / len(eligible)
+        )
+        # Neighborhood-level grading is softer than cell-level thresholds so the list
+        # has actionable spread (good / average / bad) across all neighborhoods.
+        if avg_score >= 58 and avg_pop >= 1200:
+            neighborhood_rating = "good"
+            opp_cat = "high_opportunity"
+        elif avg_score >= 52 and avg_pop >= 300:
+            neighborhood_rating = "average"
+            opp_cat = "moderate_opportunity"
+        else:
+            neighborhood_rating = "bad"
+            opp_cat = "low_opportunity"
+
+        rep = dict(best)
+        rep["neighborhood"] = nb
+        rep["opportunities_in_neighborhood"] = len(eligible)
+        rep["average_neighborhood_score"] = round(avg_score, 2)
+        rep["average_pop_density_per_km2"] = round(avg_pop, 2)
+        rep["neighborhood_rating"] = neighborhood_rating
+        rep["opportunity_category"] = opp_cat
+        rep["legal_opportunities_count"] = len(eligible)
+        rep["explanation"] = (
+            f"{len(eligible)} opportunities found in {nb}. " + str(rep.get("explanation", "")).strip()
+        ).strip()
+        out.append(rep)
+
+    out.sort(
+        key=lambda x: (
+            float(x.get("score", 0)),
+            int(x.get("opportunities_in_neighborhood", 0)),
+        ),
+        reverse=True,
+    )
+    return out[:top_n]
+
+
 def recommendations_from_opportunities_geojson(
     opp_geojson: dict[str, Any], top_n: int = 30
 ) -> list[dict[str, Any]]:
@@ -108,11 +171,21 @@ def recommendations_from_opportunities_geojson(
         nb = p.get("neighborhood")
         if isinstance(nb, float) and math.isnan(nb):
             nb = None
+        elif nb is not None:
+            nb = str(nb).strip() or None
         pn = p.get("nearest_pharmacy_name")
         if isinstance(pn, float) and math.isnan(pn):
             pn = None
         elif pn is not None:
             pn = str(pn).strip() or None
+
+        # Always provide a displayable area label for sidebar cards.
+        if not nb:
+            if pn:
+                nb = f"Near {pn}"
+            else:
+                nb = f"Zone {lat:.3f}, {lon:.3f}"
+
         rows.append(
             {
                 "neighborhood": nb,
@@ -129,7 +202,7 @@ def recommendations_from_opportunities_geojson(
         )
 
     rows.sort(key=lambda r: r["score"], reverse=True)
-    return diversify_bucket(rows, top_n)
+    return _aggregate_by_neighborhood(rows, top_n)
 
 
 def get_recommendations(city_slug: str, top_n: int = 30, refresh_cache: bool = False) -> list[dict[str, Any]]:

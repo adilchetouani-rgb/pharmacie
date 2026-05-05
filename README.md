@@ -118,57 +118,37 @@ Then open **http://localhost:8080** (nginx serves the built UI and proxies `/api
 
 **Honest note:** Docker does not make the **same** analysis use less CPU or RAM than running natively — it mainly helps you **turn the stack off** easily and **bound** peak usage. Heavy grid + Overpass work is still heavy inside the container.
 
-## Deploy backend on Oracle Cloud (Always Free ARM)
+## Deploy: Railway (backend) + Vercel (frontend)
 
-Step-by-step: [docs/DEPLOY_ORACLE.md](docs/DEPLOY_ORACLE.md). Use an **Ampere A1** VM with enough RAM; bootstrap script: `scripts/oracle-vm-bootstrap.sh`.
+This repo is now configured for this split deployment:
+- `railway.json` builds backend from `backend/Dockerfile`
+- frontend reads `VITE_API_BASE_URL` for API calls
+- `frontend/vercel.json` handles SPA routing
 
-## Deploy backend on Google Cloud Run
+### 1) Deploy backend to Railway
 
-HTTPS URL, pairs well with Vercel: [docs/DEPLOY_GCP.md](docs/DEPLOY_GCP.md). Build uses `cloudbuild.yaml` at repo root; the API listens on **`PORT`** (Cloud Run) or **8000** (local Docker).
-
-## Run the API in Google Colab (demo / no GCP project)
-
-For a quick public HTTPS URL without managing Cloud Run, open **[notebooks/PharmaSpot_Colab.ipynb](notebooks/PharmaSpot_Colab.ipynb)** in Colab (File → Upload notebook, or open from GitHub). It installs the backend, starts FastAPI, and uses **ngrok** so you can set `VITE_API_BASE_URL` on Vercel. Colab sessions disconnect when idle; not a replacement for a real server.
-
-## Public deployment (shareable link)
-
-This app is best deployed as:
-
-- **Frontend on Vercel** (React/Vite static build).
-- **Backend on a Python host** (Render/Railway/Fly.io), because this API uses heavy geospatial libs (`geopandas`, `rasterio`, `shapely`) and long-running Overpass/raster work that does not fit typical Vercel serverless limits.
-
-### 1) Deploy backend first (example: Render)
-
-Use `backend/Dockerfile` as the service runtime and mount a persistent disk for `/app/data_cache` so Overpass and raster files survive restarts.
-
-When backend is live, copy its URL, for example:
-
-`https://pharmaspot-backend.onrender.com`
-
-Test:
-
-- `https://pharmaspot-backend.onrender.com/api/health`
-- `https://pharmaspot-backend.onrender.com/api/cities`
+1. Push this repo to GitHub.
+2. In Railway: **New Project** -> **Deploy from GitHub repo**.
+3. Railway detects `railway.json` and builds the backend Docker image.
+4. In Railway service settings, ensure:
+   - Start command comes from Dockerfile (no override needed)
+   - Public networking is enabled
+5. Wait for deploy, then copy the backend URL (example: `https://your-backend.up.railway.app`).
+6. Verify backend health in browser:
+   - `https://your-backend.up.railway.app/api/health`
 
 ### 2) Deploy frontend to Vercel
 
-Create a Vercel project rooted at `frontend/` with:
+1. In Vercel: **Add New Project** -> import same GitHub repo.
+2. Set **Root Directory** to `frontend`.
+3. Framework preset: **Vite** (auto-detected).
+4. Add environment variable:
+   - `VITE_API_BASE_URL=https://your-backend.up.railway.app`
+5. Deploy.
 
-- **Framework preset:** Vite
-- **Build command:** `npm run build`
-- **Output directory:** `dist`
+### 3) Redeploy when backend URL changes
 
-Set environment variable in Vercel:
-
-- `VITE_API_BASE_URL=https://your-backend-url.example.com`
-
-Then deploy. Vercel will give you a public URL like:
-
-`https://your-app-name.vercel.app`
-
-### 3) Update CORS if you want to lock it down
-
-Current backend CORS allows all origins (`*`) for easier setup. For production hardening, restrict it to your Vercel domain.
+If Railway gives a new URL, update `VITE_API_BASE_URL` in Vercel and redeploy.
 
 ## Cities
 

@@ -26,6 +26,9 @@ import "leaflet/dist/leaflet.css";
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 const apiUrl = (path) => `${API_BASE_URL}${path}`;
 
+
+
+
 // Fix default marker icons (bundlers break asset paths)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -114,6 +117,18 @@ function FlyToCity({ center }) {
   return null;
 }
 
+function FlyToRecommendation({ target }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!target) return;
+    const lat = Number(target.lat);
+    const lon = Number(target.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    map.flyTo([lat, lon], Math.max(map.getZoom(), 14), { duration: 0.7 });
+  }, [target, map]);
+  return null;
+}
+
 function opportunityStyle(feature) {
   const tier = feature?.properties?.color_tier || "red";
   const colors = {
@@ -170,6 +185,7 @@ export default function App() {
   const [recErr, setRecErr] = useState(null);
   const [data, setData] = useState(null);
   const [recs, setRecs] = useState([]);
+  const [selectedRecCoord, setSelectedRecCoord] = useState(null);
 
   const center = useMemo(() => {
     const c = cities.find((x) => x.slug === citySlug);
@@ -194,6 +210,7 @@ export default function App() {
     setLoading(true);
     setErr(null);
     setRecErr(null);
+    setSelectedRecCoord(null);
     const slug = encodeURIComponent(citySlug);
     const parseError = async (r, text) => {
       let msg = text || r.statusText;
@@ -226,7 +243,7 @@ export default function App() {
         heatmap: aj.heatmap,
       });
 
-      const r2 = await fetch(apiUrl(`/api/recommendations/${slug}?top_n=30`));
+      const r2 = await fetch(apiUrl(`/api/recommendations/${slug}?top_n=200`));
       const t2 = await r2.text();
       if (!r2.ok) {
         setRecs([]);
@@ -253,6 +270,18 @@ export default function App() {
   const pharmFeatures = data?.pharmacies?.features || [];
   const oppFeatures = data?.opportunities?.features || [];
   const heatPoints = data?.heatmap || [];
+  const goodRecs = useMemo(
+    () => recs.filter((r) => r.neighborhood_rating === "good"),
+    [recs]
+  );
+  const avgRecs = useMemo(
+    () => recs.filter((r) => r.neighborhood_rating === "average"),
+    [recs]
+  );
+  const badRecs = useMemo(
+    () => recs.filter((r) => r.neighborhood_rating === "bad"),
+    [recs]
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -342,6 +371,7 @@ export default function App() {
         <div style={{ flex: 1, position: "relative" }}>
           <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
             <FlyToCity center={center} />
+            <FlyToRecommendation target={selectedRecCoord} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -429,21 +459,25 @@ export default function App() {
             padding: 12,
           }}
         >
-          <h2 style={{ margin: "0 0 10px", fontSize: "1rem" }}>Top recommendations</h2>
+          <h2 style={{ margin: "0 0 10px", fontSize: "1rem" }}>Neighborhood ratings</h2>
           <p style={{ margin: "0 0 12px", fontSize: "0.82rem", opacity: 0.8 }}>
-            Ranked mix of high, moderate, and lower opportunities. All respect ≥300 m from
-            nearest mapped pharmacy and require population + buildings when raster is
-            available.
+            One row per neighborhood using legal + population signals. Shows all good
+            opportunities, all average, and a sample of bad opportunities.
           </p>
+          <div style={{ fontSize: "0.78rem", opacity: 0.85, marginBottom: 10 }}>
+            Good: {goodRecs.length} · Average: {avgRecs.length} · Bad: {badRecs.length}
+          </div>
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {recs.map((r, i) => (
+            {[...goodRecs, ...avgRecs, ...badRecs.slice(0, 25)].map((r, i) => (
               <li
                 key={i}
+                onClick={() => setSelectedRecCoord(r.coordinates)}
                 style={{
                   marginBottom: 10,
                   padding: 10,
                   background: "#1a2332",
                   borderRadius: 8,
+                  cursor: "pointer",
                   borderLeft: `4px solid ${
                     r.score >= 70 ? "#2563eb" : r.score >= 40 ? "#16a34a" : "#dc2626"
                   }`,
@@ -452,13 +486,20 @@ export default function App() {
                 <div style={{ fontWeight: 600 }}>
                   {r.neighborhood || "Area"}{" "}
                   <span style={{ opacity: 0.75, fontWeight: 400 }}>
-                    · {r.score.toFixed(1)} pts
+                    · score {r.score.toFixed(1)} · avg{" "}
+                    {Number(r.average_neighborhood_score || 0).toFixed(1)}
                   </span>
                 </div>
                 <div style={{ fontSize: "0.78rem", opacity: 0.85, marginTop: 4 }}>
                   {r.opportunity_category.replace(/_/g, " ")} · nearest pharmacy{" "}
                   {r.nearest_pharmacy_name ? `“${r.nearest_pharmacy_name}” · ` : ""}
                   {r.distance_nearest_pharmacy_m} m
+                  {Number.isFinite(r.opportunities_in_neighborhood)
+                    ? ` · ${r.opportunities_in_neighborhood} opportunities`
+                    : ""}
+                  {Number.isFinite(r.average_pop_density_per_km2)
+                    ? ` · avg pop ${Math.round(r.average_pop_density_per_km2)}/km²`
+                    : ""}
                 </div>
                 <div style={{ fontSize: "0.78rem", marginTop: 6, lineHeight: 1.35 }}>
                   {r.explanation}

@@ -43,6 +43,10 @@ def _bbox_tuple(city: City) -> tuple[float, float, float, float]:
     return (min_lat, min_lon, max_lat, max_lon)  # Overpass uses S,W,N,E
 
 
+def _expand_bbox(s: float, w: float, n: float, e: float, deg: float) -> tuple[float, float, float, float]:
+    return (s - deg, w - deg, n + deg, e + deg)
+
+
 def _run_overpass(query: str, cache_path, max_rounds: int = 8) -> dict[str, Any]:
     global _rr_counter
     cached = read_json_cached(cache_path)
@@ -144,7 +148,9 @@ def _elements_to_gdf(elements: list[dict], city: City) -> gpd.GeoDataFrame:
     return gdf
 
 
-def _pharmacy_elements_to_gdf(elements: list[Any], city: City) -> gpd.GeoDataFrame:
+def _pharmacy_elements_to_gdf(
+    elements: list[Any], city: City, clip_margin_deg: float = 0.03
+) -> gpd.GeoDataFrame:
     """Pharmacy nodes/ways/relations with optional OSM name (or brand/operator fallback)."""
     rows = []
     for el in elements:
@@ -167,14 +173,20 @@ def _pharmacy_elements_to_gdf(elements: list[Any], city: City) -> gpd.GeoDataFra
         return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
     gdf = gpd.GeoDataFrame(rows, crs="EPSG:4326")
     min_lon, min_lat, max_lon, max_lat = city.bbox
-    b = box(min_lon, min_lat, max_lon, max_lat)
+    b = box(
+        min_lon - clip_margin_deg,
+        min_lat - clip_margin_deg,
+        max_lon + clip_margin_deg,
+        max_lat + clip_margin_deg,
+    )
     gdf = gdf[gdf.intersects(b)]
     return gdf
 
 
 def fetch_pharmacies(city: City, use_cache: bool = True) -> gpd.GeoDataFrame:
-    s, w, n, e = _bbox_tuple(city)
-    key = cache_key("pharmacy", city.slug, f"{s},{w},{n},{e}")
+    s0, w0, n0, e0 = _bbox_tuple(city)
+    s, w, n, e = _expand_bbox(s0, w0, n0, e0, 0.03)
+    key = cache_key("pharmacy_v2", city.slug, f"{s},{w},{n},{e}")
     path = json_cache_path("overpass", key)
     if not use_cache and path.exists():
         path.unlink()
@@ -381,7 +393,7 @@ def fetch_highway_corridors(city: City, use_cache: bool = True) -> gpd.GeoDataFr
 def fetch_neighborhood_labels(city: City, use_cache: bool = True) -> gpd.GeoDataFrame:
     """Named place areas for labeling recommendations (nodes + way centroids)."""
     s, w, n, e = _bbox_tuple(city)
-    key = cache_key("places_v2", city.slug, f"{s},{w},{n},{e}")
+    key = cache_key("places_v3", city.slug, f"{s},{w},{n},{e}")
     path = json_cache_path("overpass", key)
     if not use_cache and path.exists():
         path.unlink()
@@ -395,11 +407,20 @@ def fetch_neighborhood_labels(city: City, use_cache: bool = True) -> gpd.GeoData
       node["place"="district"]({s},{w},{n},{e});
       node["place"="city_district"]({s},{w},{n},{e});
       node["place"="borough"]({s},{w},{n},{e});
+      node["place"="locality"]({s},{w},{n},{e});
+      node["place"="village"]({s},{w},{n},{e});
+      node["place"="hamlet"]({s},{w},{n},{e});
       way["place"="suburb"]({s},{w},{n},{e});
       way["place"="quarter"]({s},{w},{n},{e});
       way["place"="neighbourhood"]({s},{w},{n},{e});
       way["place"="district"]({s},{w},{n},{e});
       way["place"="city_district"]({s},{w},{n},{e});
+      relation["place"="suburb"]({s},{w},{n},{e});
+      relation["place"="quarter"]({s},{w},{n},{e});
+      relation["place"="neighbourhood"]({s},{w},{n},{e});
+      relation["place"="district"]({s},{w},{n},{e});
+      relation["place"="city_district"]({s},{w},{n},{e});
+      relation["boundary"="administrative"]["admin_level"~"9|10"]({s},{w},{n},{e});
     );
     out center;
     """
@@ -412,7 +433,7 @@ def fetch_neighborhood_labels(city: City, use_cache: bool = True) -> gpd.GeoData
         typ = el.get("type")
         if typ == "node" and "lat" in el:
             rows.append({"name": name, "geometry": Point(el["lon"], el["lat"])})
-        elif typ == "way" and "center" in el:
+        elif typ in ("way", "relation") and "center" in el:
             c = el["center"]
             rows.append({"name": name, "geometry": Point(c["lon"], c["lat"])})
     if not rows:
