@@ -197,6 +197,9 @@ export default function App() {
   const [data, setData] = useState(null);
   const [recs, setRecs] = useState([]);
   const [selectedRecCoord, setSelectedRecCoord] = useState(null);
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth <= 900 : false
+  );
 
   const center = useMemo(() => {
     const c = cities.find((x) => x.slug === citySlug);
@@ -285,6 +288,12 @@ export default function App() {
     runAnalyze();
   }, [runAnalyze]);
 
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 900);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const pharmFeatures = data?.pharmacies?.features || [];
   const oppFeatures = data?.opportunities?.features || [];
   const heatPoints = data?.heatmap || [];
@@ -312,6 +321,7 @@ export default function App() {
           flexWrap: "wrap",
           alignItems: "center",
           gap: 12,
+          alignContent: isMobile ? "flex-start" : "center",
         }}
       >
         <h1 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>
@@ -325,7 +335,15 @@ export default function App() {
             </span>
           )}
         </span>
-        <label style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+        <label
+          style={{
+            marginLeft: isMobile ? 0 : "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            width: isMobile ? "100%" : "auto",
+          }}
+        >
           <span>City</span>
           <select
             value={citySlug}
@@ -385,9 +403,13 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        <div style={{ flex: 1, position: "relative" }}>
-          <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
+      <div style={{ flex: 1, display: "flex", minHeight: 0, flexDirection: isMobile ? "column" : "row" }}>
+        <div style={{ flex: 1, position: "relative", minHeight: isMobile ? "56vh" : 0 }}>
+          <MapContainer
+            center={center}
+            zoom={13}
+            style={{ height: isMobile ? "56vh" : "100%", width: "100%" }}
+          >
             <FlyToCity center={center} />
             <FlyToRecommendation target={selectedRecCoord} />
             <TileLayer
@@ -442,7 +464,7 @@ export default function App() {
               borderRadius: 8,
               fontSize: "12px",
               border: "1px solid #2d3f5a",
-              maxWidth: 280,
+              maxWidth: isMobile ? 240 : 280,
             }}
           >
             <div style={{ fontWeight: 700, marginBottom: 6 }}>Legend</div>
@@ -470,8 +492,10 @@ export default function App() {
 
         <aside
           style={{
-            width: 340,
-            borderLeft: "1px solid #2d3f5a",
+            width: isMobile ? "100%" : 340,
+            maxHeight: isMobile ? "44vh" : "none",
+            borderLeft: isMobile ? "none" : "1px solid #2d3f5a",
+            borderTop: isMobile ? "1px solid #2d3f5a" : "none",
             overflow: "auto",
             background: "#111820",
             padding: 12,
